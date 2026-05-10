@@ -25,11 +25,16 @@ public class JwtService {
     }
 
     public String generateToken(String subject) {
+        return generateToken(subject, "user");
+    }
+
+    public String generateToken(String subject, String role) {
         Instant now = Instant.now();
         Instant expiration = now.plus(appProperties.getJwt().getExpirationMinutes(), ChronoUnit.MINUTES);
 
         return Jwts.builder()
                 .subject(subject)
+                .claim("role", role)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiration))
                 .signWith(signingKey)
@@ -44,6 +49,19 @@ public class JwtService {
                     .parseSignedClaims(token)
                     .getPayload();
             return Optional.ofNullable(claims.getSubject());
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    public Optional<String> getRoleFromToken(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(signingKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            return Optional.ofNullable(claims.get("role", String.class));
         } catch (Exception ex) {
             return Optional.empty();
         }

@@ -23,6 +23,7 @@ function safeStorageRemove(key: string) {
 type User = {
   identifier: string;
   email?: string;
+  role?: string;
 };
 
 type AuthContextValue = {
@@ -79,16 +80,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [token]);
 
-  const requestOtp = async (identifier: string) => {
+  const requestOtp = async (identifier: string, role: string = "user") => {
     const res = await fetch(`${API_BASE}/api/auth/request-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier }),
+      body: JSON.stringify({ identifier, role }),
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(text || "Failed to request OTP");
     }
+    const data = await res.json();
+    return data.devOtp || null; // Return OTP if in dev mode
   };
 
   const verifyOtp = async (identifier: string, otp: string) => {
@@ -105,8 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const body = await res.json();
     const newToken = body.token;
+    const role = body.role || "user";
     setToken(newToken);
     safeStorageSet(STORAGE_KEY, newToken);
+    safeStorageSet("ca:auth:role", role);
 
     // populate user
     const meRes = await fetch(`${API_BASE}/api/auth/me`, {
@@ -114,17 +119,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     if (meRes.ok) {
       const me = await meRes.json();
-      setUser({ identifier: me.identifier, email: me.email });
+      setUser({ identifier: me.identifier, email: me.email, role: me.role || role });
     }
 
     navigate("/dashboard", { replace: true });
   };
 
-  const manualLogin = async (identifier: string) => {
+  const manualLogin = async (identifier: string, role: string = "user") => {
     const res = await fetch(`${API_BASE}/api/auth/manual-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier }),
+      body: JSON.stringify({ identifier, role }),
     });
 
     if (!res.ok) {
@@ -134,15 +139,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const body = await res.json();
     const newToken = body.token;
+    const roleFromResponse = body.role || role;
     setToken(newToken);
     safeStorageSet(STORAGE_KEY, newToken);
+    safeStorageSet("ca:auth:role", roleFromResponse);
 
     const meRes = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${newToken}` },
     });
     if (meRes.ok) {
       const me = await meRes.json();
-      setUser({ identifier: me.identifier, email: me.email });
+      setUser({ identifier: me.identifier, email: me.email, role: me.role || roleFromResponse });
     }
 
     navigate("/dashboard", { replace: true });

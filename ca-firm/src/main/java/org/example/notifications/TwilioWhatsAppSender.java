@@ -3,9 +3,16 @@ package org.example.notifications;
 import org.example.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
+import java.util.Base64;
+
 
 @Service
 public class TwilioWhatsAppSender implements WhatsAppSender {
@@ -13,10 +20,11 @@ public class TwilioWhatsAppSender implements WhatsAppSender {
     private static final Logger LOGGER = LoggerFactory.getLogger(TwilioWhatsAppSender.class);
 
     private final AppProperties appProperties;
-    private final RestClient restClient = RestClient.builder().build();
+    private final RestTemplate restTemplate;
 
-    public TwilioWhatsAppSender(AppProperties appProperties) {
+    public TwilioWhatsAppSender(AppProperties appProperties, RestTemplateBuilder restTemplateBuilder) {
         this.appProperties = appProperties;
+        this.restTemplate = restTemplateBuilder.build();
     }
 
     @Override
@@ -42,13 +50,21 @@ public class TwilioWhatsAppSender implements WhatsAppSender {
             String to = asWhatsAppAddress(phoneNumber);
             String body = "Your CA Firm OTP is " + otp + ". It expires in " + appProperties.getOtp().getExpirationMinutes() + " minutes.";
 
-            restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .headers(headers -> headers.setBasicAuth(accountSid, authToken))
-                    .body("From=" + encode(from) + "&To=" + encode(to) + "&Body=" + encode(body))
-                    .retrieve()
-                    .toBodilessEntity();
+                // Create headers
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+                String auth = accountSid + ":" + authToken;
+                String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+                headers.set("Authorization", "Basic " + encodedAuth);
+
+                // Create body
+                MultiValueMap<String, String> body_map = new LinkedMultiValueMap<>();
+                body_map.add("From", from);
+                body_map.add("To", to);
+                body_map.add("Body", body);
+
+                HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body_map, headers);
+                restTemplate.postForObject(url, request, String.class);
             return true;
         } catch (Exception ex) {
             LOGGER.error("Failed to send OTP over WhatsApp to {}", phoneNumber, ex);
@@ -66,9 +82,5 @@ public class TwilioWhatsAppSender implements WhatsAppSender {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
-    }
-
-    private String encode(String value) {
-        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }
 }

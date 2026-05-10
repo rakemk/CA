@@ -6,7 +6,9 @@ import java.util.Objects;
 import org.example.auth.dto.ApiMessageDto;
 import org.example.auth.dto.AuthResponseDto;
 import org.example.auth.dto.OtpRequestDto;
+import org.example.auth.dto.OtpResponseDto;
 import org.example.auth.dto.VerifyOtpDto;
+import org.example.auth.model.UserRole;
 import org.example.auth.service.JwtService;
 import org.example.auth.service.OtpService;
 import org.example.config.AppProperties;
@@ -24,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import jakarta.validation.Valid;
+import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -47,8 +49,8 @@ public class AuthController {
     }
 
     @PostMapping("/request-otp")
-    public ResponseEntity<ApiMessageDto> requestOtp(@Valid @RequestBody OtpRequestDto request) {
-        String identifier = normalizeIdentifier(request.identifier());
+    public ResponseEntity<?> requestOtp(@Valid @RequestBody OtpRequestDto request) {
+        String identifier = normalizeIdentifier(request.getIdentifier());
         String otp = otpService.issueOtp(identifier);
 
         boolean emailSent = false;
@@ -59,9 +61,16 @@ public class AuthController {
             whatsappSent = whatsAppSender.sendOtp(identifier, otp);
         }
 
+        // Dev mode: return OTP in response
+        if (appProperties.getOtp().isDevModeDisplay()) {
+            OtpResponseDto response = new OtpResponseDto("OTP generated", otp);
+            return ResponseEntity.ok(response);
+        }
+
         if (!appProperties.getMail().isEnabled() && !appProperties.getWhatsapp().isEnabled()) {
             LOGGER.info("OTP dev fallback for {}: {}", identifier, otp);
-            return ResponseEntity.ok(new ApiMessageDto("OTP generated locally. Check server logs for the OTP in development mode."));
+            ApiMessageDto msg = new ApiMessageDto("OTP generated locally. Check server logs for the OTP in development mode.");
+            return ResponseEntity.ok(msg);
         }
 
         if (!emailSent && !whatsappSent) {
@@ -69,27 +78,29 @@ public class AuthController {
                     "OTP could not be delivered. Check email/WhatsApp provider configuration.");
         }
 
+        ApiMessageDto response;
         if (emailSent && whatsappSent) {
-            return ResponseEntity.ok(new ApiMessageDto("OTP sent on email and WhatsApp"));
+            response = new ApiMessageDto("OTP sent on email and WhatsApp");
+        } else if (whatsappSent) {
+            response = new ApiMessageDto("OTP sent on WhatsApp");
+        } else {
+            response = new ApiMessageDto("OTP sent on email");
         }
-
-        if (whatsappSent) {
-            return ResponseEntity.ok(new ApiMessageDto("OTP sent on WhatsApp"));
-        }
-
-        return ResponseEntity.ok(new ApiMessageDto("OTP sent on email"));
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/verify-otp")
     public ResponseEntity<AuthResponseDto> verifyOtp(@Valid @RequestBody VerifyOtpDto request) {
-        String identifier = normalizeIdentifier(request.identifier());
-        boolean valid = otpService.verifyOtp(identifier, request.otp());
+        String identifier = normalizeIdentifier(request.getIdentifier());
+        boolean valid = otpService.verifyOtp(identifier, request.getOtp());
         if (!valid) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired OTP");
         }
 
-        String token = jwtService.generateToken(identifier);
-        return ResponseEntity.ok(new AuthResponseDto(token, "Bearer", jwtService.getExpirationEpochSeconds()));
+        String role = appProperties.getAuth().getDefaultRole();
+        String token = jwtService.generateToken(identifier, role);
+        AuthResponseDto response = new AuthResponseDto(token, "Bearer", jwtService.getExpirationEpochSeconds(), role);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/manual-login")
@@ -104,13 +115,15 @@ public class AuthController {
                     "Manual login is enabled but no manual identifier is configured");
         }
 
-        String identifier = normalizeIdentifier(request.identifier());
+        String identifier = normalizeIdentifier(request.getIdentifier());
         if (!Objects.equals(identifier, configuredIdentifier)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Manual login is not allowed for this identifier");
         }
 
-        String token = jwtService.generateToken(identifier);
-        return ResponseEntity.ok(new AuthResponseDto(token, "Bearer", jwtService.getExpirationEpochSeconds()));
+        String role = request.getRole() != null ? request.getRole() : appProperties.getAuth().getDefaultRole();
+        String token = jwtService.generateToken(identifier, role);
+        AuthResponseDto response = new AuthResponseDto(token, "Bearer", jwtService.getExpirationEpochSeconds(), role);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/me")
@@ -119,7 +132,17 @@ public class AuthController {
         String subject = jwtService.getSubjectFromToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token"));
 
-        return ResponseEntity.ok(Map.of("identifier", subject, "email", subject));
+        String role = jwtService.getRoleFromToken(token).orElse("user");
+        return ResponseEntity.ok(Map.of("identifier", subject, "email", subject, "role", role));
+    }
+
+    @GetMapping("/role")
+    public ResponseEntity<Map<String, String>> getRole(@RequestHeader(name = "Authorization", required = false) String authHeader) {
+        String token = extractBearerToken(authHeader);
+        String role = jwtService.getRoleFromToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token"));
+
+        return ResponseEntity.ok(Map.of("role", role));
     }
 
     private boolean isEmailIdentifier(String identifier) {

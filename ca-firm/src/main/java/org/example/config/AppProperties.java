@@ -65,6 +65,7 @@ public class AppProperties {
         private int length = 6;
         private long expirationMinutes = 5;
         private int maxAttempts = 5;
+        private boolean devModeDisplay = true;
 
         public int getLength() {
             return length;
@@ -89,11 +90,20 @@ public class AppProperties {
         public void setMaxAttempts(int maxAttempts) {
             this.maxAttempts = maxAttempts;
         }
+
+        public boolean isDevModeDisplay() {
+            return devModeDisplay;
+        }
+
+        public void setDevModeDisplay(boolean devModeDisplay) {
+            this.devModeDisplay = devModeDisplay;
+        }
     }
 
     public static class Auth {
         private boolean manualEnabled = false;
         private String manualIdentifier = "";
+        private String defaultRole = "user";
 
         public boolean isManualEnabled() {
             return manualEnabled;
@@ -109,6 +119,14 @@ public class AppProperties {
 
         public void setManualIdentifier(String manualIdentifier) {
             this.manualIdentifier = manualIdentifier;
+        }
+
+        public String getDefaultRole() {
+            return defaultRole;
+        }
+
+        public void setDefaultRole(String defaultRole) {
+            this.defaultRole = defaultRole;
         }
     }
 
