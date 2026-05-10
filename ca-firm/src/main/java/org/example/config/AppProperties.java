@@ -7,6 +7,7 @@ public class AppProperties {
 
     private final Jwt jwt = new Jwt();
     private final Otp otp = new Otp();
+    private final Auth auth = new Auth();
     private final Mail mail = new Mail();
     private final Whatsapp whatsapp = new Whatsapp();
     private String frontendOrigin = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://[::1]:5173";
@@ -17,6 +18,10 @@ public class AppProperties {
 
     public Otp getOtp() {
         return otp;
+    }
+
+    public Auth getAuth() {
+        return auth;
     }
 
     public Mail getMail() {
@@ -83,6 +88,27 @@ public class AppProperties {
 
         public void setMaxAttempts(int maxAttempts) {
             this.maxAttempts = maxAttempts;
+        }
+    }
+
+    public static class Auth {
+        private boolean manualEnabled = false;
+        private String manualIdentifier = "";
+
+        public boolean isManualEnabled() {
+            return manualEnabled;
+        }
+
+        public void setManualEnabled(boolean manualEnabled) {
+            this.manualEnabled = manualEnabled;
+        }
+
+        public String getManualIdentifier() {
+            return manualIdentifier;
+        }
+
+        public void setManualIdentifier(String manualIdentifier) {
+            this.manualIdentifier = manualIdentifier;
         }
     }
 

@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -85,6 +86,27 @@ public class AuthController {
         boolean valid = otpService.verifyOtp(identifier, request.otp());
         if (!valid) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired OTP");
+        }
+
+        String token = jwtService.generateToken(identifier);
+        return ResponseEntity.ok(new AuthResponseDto(token, "Bearer", jwtService.getExpirationEpochSeconds()));
+    }
+
+    @PostMapping("/manual-login")
+    public ResponseEntity<AuthResponseDto> manualLogin(@Valid @RequestBody OtpRequestDto request) {
+        if (!appProperties.getAuth().isManualEnabled()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Manual login is disabled");
+        }
+
+        String configuredIdentifier = normalizeIdentifier(appProperties.getAuth().getManualIdentifier());
+        if (configuredIdentifier.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Manual login is enabled but no manual identifier is configured");
+        }
+
+        String identifier = normalizeIdentifier(request.identifier());
+        if (!Objects.equals(identifier, configuredIdentifier)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Manual login is not allowed for this identifier");
         }
 
         String token = jwtService.generateToken(identifier);
