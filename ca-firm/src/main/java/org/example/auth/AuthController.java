@@ -1,6 +1,8 @@
 package org.example.auth;
 
-import jakarta.validation.Valid;
+import java.util.Map;
+import java.util.Objects;
+
 import org.example.auth.dto.ApiMessageDto;
 import org.example.auth.dto.AuthResponseDto;
 import org.example.auth.dto.OtpRequestDto;
@@ -10,6 +12,8 @@ import org.example.auth.service.OtpService;
 import org.example.config.AppProperties;
 import org.example.notifications.EmailSender;
 import org.example.notifications.WhatsAppSender;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,11 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Map;
-import java.util.Objects;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
