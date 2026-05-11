@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const STORAGE_KEY = "ca:auth:token";
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8081";
 
 function safeStorageSet(key: string, value: string) {
   try {
@@ -30,7 +30,7 @@ type AuthContextValue = {
   token: string | null;
   user: User | null;
   loading: boolean;
-  requestOtp: (identifier: string) => Promise<void>;
+  requestOtp: (identifier: string, role?: string) => Promise<{ token: string | null; devOtp: string | null }>;
   verifyOtp: (identifier: string, otp: string) => Promise<void>;
   manualLogin: (identifier: string) => Promise<void>;
   logout: () => void;
@@ -80,6 +80,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [token]);
 
+  const applyToken = async (newToken: string, role: string) => {
+    setToken(newToken);
+    safeStorageSet(STORAGE_KEY, newToken);
+    safeStorageSet("ca:auth:role", role);
+
+    const meRes = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${newToken}` },
+    });
+    if (meRes.ok) {
+      const me = await meRes.json();
+      setUser({ identifier: me.identifier, email: me.email, role: me.role || role });
+    }
+
+    navigate("/dashboard", { replace: true });
+  };
+
   const requestOtp = async (identifier: string, role: string = "user") => {
     const res = await fetch(`${API_BASE}/api/auth/request-otp`, {
       method: "POST",
@@ -91,7 +107,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(text || "Failed to request OTP");
     }
     const data = await res.json();
-    return data.devOtp || null; // Return OTP if in dev mode
+
+    if (data?.token) {
+      await applyToken(data.token, data.role || role);
+    }
+
+    return { token: data?.token || null, devOtp: data?.devOtp || null };
   };
 
   const verifyOtp = async (identifier: string, otp: string) => {
@@ -109,20 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const body = await res.json();
     const newToken = body.token;
     const role = body.role || "user";
-    setToken(newToken);
-    safeStorageSet(STORAGE_KEY, newToken);
-    safeStorageSet("ca:auth:role", role);
-
-    // populate user
-    const meRes = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${newToken}` },
-    });
-    if (meRes.ok) {
-      const me = await meRes.json();
-      setUser({ identifier: me.identifier, email: me.email, role: me.role || role });
-    }
-
-    navigate("/dashboard", { replace: true });
+    await applyToken(newToken, role);
   };
 
   const manualLogin = async (identifier: string, role: string = "user") => {
@@ -140,19 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const body = await res.json();
     const newToken = body.token;
     const roleFromResponse = body.role || role;
-    setToken(newToken);
-    safeStorageSet(STORAGE_KEY, newToken);
-    safeStorageSet("ca:auth:role", roleFromResponse);
-
-    const meRes = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${newToken}` },
-    });
-    if (meRes.ok) {
-      const me = await meRes.json();
-      setUser({ identifier: me.identifier, email: me.email, role: me.role || roleFromResponse });
-    }
-
-    navigate("/dashboard", { replace: true });
+    await applyToken(newToken, roleFromResponse);
   };
 
   const logout = () => {

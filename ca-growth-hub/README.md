@@ -48,3 +48,7 @@ Professional CA firm management dashboard with transactions, clients, and analyt
 - Backend: Default 8080; if busy, falls back to 8081, 8082, ...
 - Frontend: Port 3000 (configured in `vite.config.ts`)
 - To check what port backend actually started on, look for startup log: `"listening on port XX"`
+
+test1@gmail.com -> user
+admin1@gmail.com -> admin
+superadmin1@gmail.com -> super_admin

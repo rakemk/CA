@@ -41,8 +41,12 @@ const Login = () => {
     setError(null);
     setLoading(true);
     try {
-      const returnedOtp = await requestOtp(identifier, selectedRole);
-      setDevOtp(returnedOtp); // Show OTP if in dev mode
+      const result = await requestOtp(identifier, selectedRole);
+      if (result.token) {
+        return;
+      }
+
+      setDevOtp(result.devOtp); // Show OTP if in dev mode
       setStep("verify");
     } catch (err) {
       setError(getErrorMessage(err));
